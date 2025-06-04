@@ -8,7 +8,7 @@ def search_faiss(query, model, index, chunks, k=5):
     return results
 """
 
-import os, faiss, pickle
+import os, faiss, json, pickle
 from typing import List
 from sentence_transformers import SentenceTransformer
 
@@ -18,6 +18,12 @@ class SearchResult:
         self.score = score
         self.text = text
         self.metadata = metadata
+    
+    def __repr__(self):
+        repr = {
+            k: str(v) for k, v in self.__dict__.items()
+        }
+        return json.dumps(repr, indent=2)
         
 class SearchEngine:
     def __init__(self, cfg: dict):
