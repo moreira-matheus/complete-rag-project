@@ -4,4 +4,5 @@
 TODO:
 
 [ ] Clean text: remove page numbers, figures and captions
-[ ] Chunk intelligently: by section, keeping metadata (eg page number)
+
+[ ] Add generation layer
