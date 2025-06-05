@@ -6,7 +6,8 @@
     "EMBEDDING_MODEL_NAME": "all-MiniLM-L6-v2",
     "EMBEDDING_ENCODE_KWARGS": {
         "convert_to_numpy": true,
-        "precision": "float32"
+        "precision": "float32",
+        "normalize_embeddings": true
     },
     "CHUNK_SIZE": 1000,
     "CHUNK_OVERLAP": 100

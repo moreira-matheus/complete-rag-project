@@ -40,7 +40,7 @@ class SearchEngine:
         return SentenceTransformer(self.cfg["EMBEDDING_MODEL_NAME"])\
             .encode([query], **self.cfg["EMBEDDING_ENCODE_KWARGS"])
     
-    def load_index(self) -> faiss.IndexFlatL2:
+    def load_index(self) -> faiss.IndexFlatIP:
         if os.path.exists(self.cfg["INDEX_PATH"]):
             return faiss.read_index(self.cfg["INDEX_PATH"])
         

@@ -1,4 +1,4 @@
-import os, faiss, pickle, pymupdf
+import os, faiss, pickle, pymupdf, unicodedata
 import numpy as np
 from typing import Generator, Tuple, Optional
 from sentence_transformers import SentenceTransformer
@@ -31,9 +31,17 @@ class TextChunker:
         for page_num, page in enumerate(doc, start=1):
             yield page_num, page.get_text()
 
-    # TODO
+    def normalize_text(self, text):
+        return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    
+    #TODO
     def clean_text(self, text2clean: Optional[str]) -> str:
-        return text2clean
+        cleaned = text2clean[:]
+        cleaned = self.normalize_text(cleaned)
+        cleaned = cleaned.replace("-\n", "")
+        cleaned = cleaned.replace("\n", " ")
+
+        return cleaned
 
     def chunk_text(self, text2chunk: Optional[str]) -> Generator[str, None, None]:
         if text2chunk is None:
@@ -90,7 +98,7 @@ class Indexer:
             if os.path.exists(self.index_path):
                 self.index = faiss.read_index(self.index_path)
             else:
-                self.index = faiss.IndexFlatL2(dimensions)
+                self.index = faiss.IndexFlatIP(dimensions)
 
     def _save_index(self):
         faiss.write_index(self.index, self.index_path)
