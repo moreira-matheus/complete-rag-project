@@ -1,9 +1,6 @@
 {
-    "RAW_INPUT_FOLDER": "../input/raw/",
-    "PARSED_INPUR_FOLDER": "../input/parsed/",
-    "METADATA_PATH": "../input/parsed/metadata.pkl",
-    "INDEX_PATH": "../input/parsed/faiss_index.index",
-    "INDEX_DIR": "./chromadb",
+    "RAW_INPUT_FOLDER": "../pdfs/",
+    "INDEX_DIR": "../chromadb",
     "COLLECTION_NAME": "pdf_chunks",
     "EMBEDDING_MODEL_NAME": "all-MiniLM-L6-v2",
     "EMBEDDING_ENCODE_KWARGS": {

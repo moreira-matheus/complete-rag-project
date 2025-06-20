@@ -105,55 +105,6 @@ class Indexer:
             ]
         )
 
-# class Indexer:
-#     def __init__(self, index_path: str, metadata_path: str):
-#         self.index_path = index_path
-#         self.index = None
-#         self.metadata_path = metadata_path
-
-#     def index_chunk(self, embedded_chunk: EmbeddedChunk) -> None:
-#         self._add_to_index(
-#             embedded_chunk.embedding, 
-#             embedded_chunk.embedding.shape[1]
-#         )
-#         self._add_to_metadata({
-#             "text": embedded_chunk.text,
-#             "file_path": embedded_chunk.file_path,
-#             "page_num": embedded_chunk.page_num
-#         })
-
-#     def _load_index(self, dimensions):
-#         if self.index is None:
-#             if os.path.exists(self.index_path):
-#                 self.index = faiss.read_index(self.index_path)
-#             else:
-#                 self.index = faiss.IndexFlatIP(dimensions)
-
-#     def _save_index(self):
-#         faiss.write_index(self.index, self.index_path)
-#         self.index = None
-
-#     def _add_to_index(self, embedding: np.ndarray, dimensions: int) -> None:
-#         self._load_index(dimensions)
-#         self.index.add(embedding.astype('float32'))
-#         self._save_index()
-    
-#     def _add_to_metadata(self, metadata: dict) -> None:
-#         existing_data = []
-
-#         if os.path.exists(self.metadata_path):
-#             with open(self.metadata_path, "rb") as f:
-#                 existing_data = pickle.load(f)
-        
-#         if isinstance(existing_data, list):
-#             metadata_list = existing_data + [metadata]
-#         else:
-#             metadata_list = [metadata]
-
-#         with open(self.metadata_path, "wb") as f:
-#             pickle.dump(metadata_list, f)
-
-
 class IndexingPipeline:
     def __init__(self, cfg: dict):
         self.__check_cfg(cfg)
@@ -194,6 +145,3 @@ class IndexingPipeline:
                     indexer.index_chunk(embedded_chunk)
         
         print("Done.")
-
-if __name__ == "__main__":
-    print("Test.")
