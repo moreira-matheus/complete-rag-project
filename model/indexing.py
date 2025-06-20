@@ -1,8 +1,10 @@
-import os, faiss, pickle, pymupdf, unicodedata
+import os, pymupdf, unicodedata, uuid
 import numpy as np
 from typing import Generator, Tuple, Optional
 from sentence_transformers import SentenceTransformer
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+from model.chromadb_utils import ChromaDBClient
 
 class TextChunk:
     def __init__(self, text: str, file_path: str, page_num: int):
@@ -70,59 +72,86 @@ class ChunkEmbedder:
             self, chunk: TextChunk, encode_kwargs: dict = {}
         ) -> EmbeddedChunk:
         embedding = self.model.encode(
-            [chunk.text],
+            chunk.text,
             show_progress_bar=False,
             **encode_kwargs,
         )
         return EmbeddedChunk(chunk, embedding)
 
 class Indexer:
-    def __init__(self, index_path: str, metadata_path: str):
-        self.index_path = index_path
-        self.index = None
-        self.metadata_path = metadata_path
+    def __init__(
+            self,
+            persist_directory: str,
+            collection_name: str,
+        ):
+        self.client = ChromaDBClient(
+            persist_directory=persist_directory,
+            collection_name=collection_name
+        )
+
+    def _generate_id(self):
+        return str(uuid.uuid4())
 
     def index_chunk(self, embedded_chunk: EmbeddedChunk) -> None:
-        self._add_to_index(
-            embedded_chunk.embedding, 
-            embedded_chunk.embedding.shape[1]
+        self.client.add_to_collection(
+            ids=[self._generate_id()],
+            embeddings=[embedded_chunk.embedding.tolist()],
+            documents=[embedded_chunk.text],
+            metadatas=[
+                {
+                    "page_num": embedded_chunk.page_num,
+                    "file_path": embedded_chunk.file_path
+                }
+            ]
         )
-        self._add_to_metadata({
-            "text": embedded_chunk.text,
-            "file_path": embedded_chunk.file_path,
-            "page_num": embedded_chunk.page_num
-        })
 
-    def _load_index(self, dimensions):
-        if self.index is None:
-            if os.path.exists(self.index_path):
-                self.index = faiss.read_index(self.index_path)
-            else:
-                self.index = faiss.IndexFlatIP(dimensions)
+# class Indexer:
+#     def __init__(self, index_path: str, metadata_path: str):
+#         self.index_path = index_path
+#         self.index = None
+#         self.metadata_path = metadata_path
 
-    def _save_index(self):
-        faiss.write_index(self.index, self.index_path)
-        self.index = None
+#     def index_chunk(self, embedded_chunk: EmbeddedChunk) -> None:
+#         self._add_to_index(
+#             embedded_chunk.embedding, 
+#             embedded_chunk.embedding.shape[1]
+#         )
+#         self._add_to_metadata({
+#             "text": embedded_chunk.text,
+#             "file_path": embedded_chunk.file_path,
+#             "page_num": embedded_chunk.page_num
+#         })
 
-    def _add_to_index(self, embedding: np.ndarray, dimensions: int) -> None:
-        self._load_index(dimensions)
-        self.index.add(embedding.astype('float32'))
-        self._save_index()
+#     def _load_index(self, dimensions):
+#         if self.index is None:
+#             if os.path.exists(self.index_path):
+#                 self.index = faiss.read_index(self.index_path)
+#             else:
+#                 self.index = faiss.IndexFlatIP(dimensions)
+
+#     def _save_index(self):
+#         faiss.write_index(self.index, self.index_path)
+#         self.index = None
+
+#     def _add_to_index(self, embedding: np.ndarray, dimensions: int) -> None:
+#         self._load_index(dimensions)
+#         self.index.add(embedding.astype('float32'))
+#         self._save_index()
     
-    def _add_to_metadata(self, metadata: dict) -> None:
-        existing_data = []
+#     def _add_to_metadata(self, metadata: dict) -> None:
+#         existing_data = []
 
-        if os.path.exists(self.metadata_path):
-            with open(self.metadata_path, "rb") as f:
-                existing_data = pickle.load(f)
+#         if os.path.exists(self.metadata_path):
+#             with open(self.metadata_path, "rb") as f:
+#                 existing_data = pickle.load(f)
         
-        if isinstance(existing_data, list):
-            metadata_list = existing_data + [metadata]
-        else:
-            metadata_list = [metadata]
+#         if isinstance(existing_data, list):
+#             metadata_list = existing_data + [metadata]
+#         else:
+#             metadata_list = [metadata]
 
-        with open(self.metadata_path, "wb") as f:
-            pickle.dump(metadata_list, f)
+#         with open(self.metadata_path, "wb") as f:
+#             pickle.dump(metadata_list, f)
 
 
 class IndexingPipeline:
@@ -147,9 +176,10 @@ class IndexingPipeline:
         embedder = ChunkEmbedder(
             self.cfg["EMBEDDING_MODEL_NAME"]
         )
+        # TODO
         indexer = Indexer(
-            self.cfg["INDEX_PATH"],
-            self.cfg["METADATA_PATH"]
+            self.cfg["INDEX_DIR"],
+            self.cfg["COLLECTION_NAME"]
         )
 
         for fname in os.listdir(self.cfg["RAW_INPUT_FOLDER"]):
@@ -164,3 +194,6 @@ class IndexingPipeline:
                     indexer.index_chunk(embedded_chunk)
         
         print("Done.")
+
+if __name__ == "__main__":
+    print("Test.")
