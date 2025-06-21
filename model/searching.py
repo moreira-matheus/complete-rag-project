@@ -1,17 +1,24 @@
-
+"""
+Contains all classes used in the searching process.
+"""
 import json
 from typing import List
+from dataclasses import dataclass
 from sentence_transformers import SentenceTransformer
 
 from model.chromadb_utils import ChromaDBClient
 
+@dataclass
 class SearchResult:
-    def __init__(self, rank: int, score: float, text: str, metadata: dict):
-        self.rank = rank
-        self.score = score
-        self.text = text
-        self.metadata = metadata
-    
+    """
+    Dataclass to store information from a search result.
+    """
+    rank: int
+    score: float
+    text: str
+    metadata: dict
+
+    # pylint: disable=redefined-builtin
     def __repr__(self):
         repr = {
             k: str(v) for k, v in self.__dict__.items()
@@ -19,6 +26,9 @@ class SearchResult:
         return json.dumps(repr, indent=2)
 
 class SearchEngine:
+    """
+    Wraps the embedding and searching of a user query.
+    """
     def __init__(self, cfg: dict):
         self.__check_cfg(cfg)
         self.cfg = cfg
@@ -26,7 +36,7 @@ class SearchEngine:
             persist_directory=self.cfg["INDEX_DIR"],
             collection_name=self.cfg["COLLECTION_NAME"]
         )
-    
+
     def __check_cfg(self, cfg: dict):
         fields = [
             "EMBEDDING_MODEL_NAME", "EMBEDDING_ENCODE_KWARGS",
@@ -35,12 +45,19 @@ class SearchEngine:
 
         for field in fields:
             assert field in cfg.keys()
-    
+
     def embed_query(self, query: str):
+        """
+        Embeds a user query using a SentenceTransformer model.
+        """
         return SentenceTransformer(self.cfg["EMBEDDING_MODEL_NAME"])\
             .encode(query, **self.cfg["EMBEDDING_ENCODE_KWARGS"])
-    
+
     def search_index(self, query: str, top_k: int = 3) -> List[SearchResult]:
+        """
+        Receives a user query, embeds it and
+        searches the index for it.
+        """
         results = []
 
         embedded_query = self.embed_query(query)
@@ -57,5 +74,5 @@ class SearchEngine:
                     metadata=query_results["metadatas"][0][rank]
                 )
             )
-        
+
         return results
