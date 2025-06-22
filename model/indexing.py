@@ -10,7 +10,9 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from model.utils.chromadb_utils import ChromaDBClient
-from model.utils.text_utils import clean_text, chunk_text_with_overlap, PageAwareSentencizer
+from model.utils.text_utils import (
+    chunk_text_with_overlap, PageAwareSentencizer
+)
 
 @dataclass
 class TextChunk:
@@ -38,7 +40,12 @@ class TextProcessor:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
     
-    def chunk_sentences(self, sentences_with_pages) -> Generator[Tuple[str, Tuple], None, None]:
+    def __stringify_pages(self, pages: set) -> str:
+        return ','.join(
+            [str(p) for p in pages]
+        )
+    
+    def chunk_sentences(self, sentences_with_pages) -> Generator[Tuple[str, str], None, None]:
         chunks = []
         pages = set((1,))
 
@@ -54,7 +61,7 @@ class TextProcessor:
                     if chunks:
                         yield (
                             ' '.join(chunks),
-                            tuple(pages)
+                            self.__stringify_pages(pages)
                         )
                     chunks = [sentence]
                     pages = set(page_nums)
@@ -64,7 +71,7 @@ class TextProcessor:
                     chunk_text_with_overlap(
                         overflow_chunk, self.chunk_size, self.chunk_overlap
                     ),
-                    repeat(tuple(pages))
+                    repeat(self.__stringify_pages(pages))
                 )
                 chunks = [sentence]
                 pages = set(page_nums)
@@ -73,7 +80,7 @@ class TextProcessor:
                 chunk_text_with_overlap(
                     ' '.join(chunks), self.chunk_size, self.chunk_overlap
                 ),
-                repeat(tuple(pages))
+                repeat(self.__stringify_pages(pages))
             )
 
     def process_text(self, file_path):
@@ -162,19 +169,23 @@ class IndexingPipeline:
 
     def __check_cfg(self, cfg: dict):
         fields = [
-            "RAW_INPUT_FOLDER", "METADATA_PATH", "INDEX_PATH",
-            "EMBEDDING_MODEL_NAME", "EMBEDDING_ENCODE_KWARGS",
+            "INPUT_FOLDER", "EMBEDDING_MODEL_NAME",
+            "EMBEDDING_ENCODE_KWARGS",
+            "COLLECTION_NAME", "INDEX_DIR",
             "CHUNK_SIZE", "CHUNK_OVERLAP"
         ]
         for field in fields:
-            assert field in cfg.keys()
+            try:
+                assert field in cfg.keys()
+            except AssertionError as e:
+                print(f"Missing field from cfg: {field}.")
 
     def run(self):
         """
         Runs the indexing pipeline.
         Returns None.
         """
-        chunker = TextChunker(
+        chunker = TextProcessor(
             self.cfg["CHUNK_SIZE"],
             self.cfg["CHUNK_OVERLAP"]
         )
@@ -186,9 +197,9 @@ class IndexingPipeline:
             self.cfg["COLLECTION_NAME"]
         )
 
-        for fname in os.listdir(self.cfg["RAW_INPUT_FOLDER"]):
+        for fname in os.listdir(self.cfg["INPUT_FOLDER"]):
             if fname.endswith(".pdf"):
-                file_path = os.path.join(self.cfg["RAW_INPUT_FOLDER"], fname)
+                file_path = os.path.join(self.cfg["INPUT_FOLDER"], fname)
                 print(f"File path: {file_path}")
                 for chunk in chunker.process_text(file_path):
                     embedded_chunk = embedder.embed_chunk(
