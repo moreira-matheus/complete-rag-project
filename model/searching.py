@@ -6,7 +6,7 @@ from typing import List
 from dataclasses import dataclass
 from sentence_transformers import SentenceTransformer
 
-from model.chromadb_utils import ChromaDBClient
+from model.utils.chromadb_utils import ChromaDBClient
 
 @dataclass
 class SearchResult:

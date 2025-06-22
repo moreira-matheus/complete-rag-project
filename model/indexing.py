@@ -1,18 +1,16 @@
 """
 Contains all classes used in the indexing process.
 """
-
 import os
-import unicodedata
 import uuid
-from typing import Generator, Tuple, Optional
+from itertools import repeat
 from dataclasses import dataclass
-import pymupdf
+from typing import Generator, Tuple, Optional
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-from model.chromadb_utils import ChromaDBClient
+from model.utils.chromadb_utils import ChromaDBClient
+from model.utils.text_utils import clean_text, chunk_text_with_overlap, PageAwareSentencizer
 
 @dataclass
 class TextChunk:
@@ -21,7 +19,7 @@ class TextChunk:
     """
     text: str
     file_path: str
-    page_num: int
+    page_num: Tuple[int]
 
 @dataclass
 class EmbeddedChunk(TextChunk):
@@ -31,7 +29,7 @@ class EmbeddedChunk(TextChunk):
     """
     embedding: np.ndarray
 
-class TextChunker:
+class TextProcessor:
     """
     Reads the pages off a PDF file, processes the text,
     and yields the text chunks.
@@ -39,67 +37,55 @@ class TextChunker:
     def __init__(self, chunk_size: int, chunk_overlap: int):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.chunker = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap
-        )
+    
+    def chunk_sentences(self, sentences_with_pages) -> Generator[Tuple[str, Tuple], None, None]:
+        chunks = []
+        pages = set((1,))
 
-    def read_pages(
-            self, file_path
-        ) -> Generator[Tuple[int, Optional[str]], None, None]:
-        """
-        Reads the PDF file at file_path
-        and yields its pages.
-        """
-        doc = pymupdf.open(file_path)
-        for page_num, page in enumerate(doc, start=1):
-            yield page_num, page.get_text()
+        for sentence, page_nums in sentences_with_pages:
+            current_length = len(' '.join(chunks))
+            future_length = len(' '.join(chunks + [sentence]))
 
-    def normalize_text(self, text):
-        """
-        Normalizes a string into ascii.
-        """
-        return unicodedata.normalize("NFKD", text)\
-            .encode("ascii", "ignore").decode("ascii")
-
-    def clean_text(self, text2clean: Optional[str]) -> str:
-        """
-        Cleans text2clean of unwanted characters.
-        """
-        cleaned = text2clean[:]
-        cleaned = self.normalize_text(cleaned)
-        cleaned = cleaned.replace("-\n", "")
-        cleaned = cleaned.replace("\n", " ")
-
-        for symbol in list("†‡⋆"):
-            cleaned = cleaned.replace(symbol, "")
-
-        return cleaned
-
-    def chunk_text(self, text2chunk: Optional[str]) -> Generator[str, None, None]:
-        """
-        Chunks text2chunk into pieces of size self.chunk_size
-        with overlaps of size self.chunk_overlap.
-        """
-        if text2chunk is None:
-            text2chunk = ""
-
-        chunks = self.chunker.split_text(text2chunk)
-        yield from chunks
-
-    def process_text(self, file_path: str) -> Generator[TextChunk, None, None]:
-        """
-        Reads pages, cleans and chenks the text,
-        then yields the chunks as TextChunk objects.
-        """
-        for page_num, page_txt in self.read_pages(file_path):
-            clean_text = self.clean_text(page_txt)
-            for chunk in self.chunk_text(clean_text):
-                yield TextChunk(
-                    text=chunk,
-                    file_path=file_path,
-                    page_num=page_num
+            if current_length < self.chunk_size:
+                if future_length < self.chunk_size:
+                    chunks.append(sentence)
+                    pages.union(page_nums)
+                else:
+                    if chunks:
+                        yield (
+                            ' '.join(chunks),
+                            tuple(pages)
+                        )
+                    chunks = [sentence]
+                    pages = set(page_nums)
+            else:
+                overflow_chunk = ' '.join(chunks)
+                yield from zip(
+                    chunk_text_with_overlap(
+                        overflow_chunk, self.chunk_size, self.chunk_overlap
+                    ),
+                    repeat(tuple(pages))
                 )
+                chunks = [sentence]
+                pages = set(page_nums)
+        else:
+            yield from zip(
+                chunk_text_with_overlap(
+                    ' '.join(chunks), self.chunk_size, self.chunk_overlap
+                ),
+                repeat(tuple(pages))
+            )
+
+    def process_text(self, file_path):
+        sentencizer = PageAwareSentencizer(file_path)
+        for text, pages in self.chunk_sentences(
+            sentencizer.sentencize_with_page_num()
+        ):
+            yield TextChunk(
+                text=text,
+                file_path=file_path,
+                page_num=pages
+            )
 
 # pylint: disable=too-few-public-methods
 class ChunkEmbedder:
